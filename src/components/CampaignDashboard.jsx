@@ -127,6 +127,15 @@ function CampaignDashboard() {
     }
   }, [scopedCampaigns])
 
+  const dashboardSummary = useMemo(
+    () => [
+      { label: 'Clients in scope', value: selectedClient === 'all' ? clients.length - 1 : 1 },
+      { label: 'Campaigns in scope', value: scopedCampaigns.length },
+      { label: 'Reporting window', value: `${daysInPreset}d` },
+    ],
+    [clients.length, daysInPreset, scopedCampaigns.length, selectedClient],
+  )
+
   const tableData = useMemo(() => {
     const searched = scopedCampaigns
       .map((campaign) => ({
@@ -163,16 +172,25 @@ function CampaignDashboard() {
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[300px,1fr]">
-      <aside className="rounded-3xl border border-slate-200/80 bg-white/90 p-5 shadow-panel backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
-        <div className="mb-5 rounded-2xl border border-cyan-200 bg-cyan-50 p-4 dark:border-cyan-800/70 dark:bg-cyan-950/30">
+    <div className="grid gap-5 lg:grid-cols-[320px,1fr]">
+      <aside className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-5 shadow-panel backdrop-blur dark:border-slate-800 dark:bg-slate-950/70">
+        <div className="mb-5 rounded-[1.5rem] border border-cyan-200 bg-gradient-to-br from-cyan-50 to-white p-4 dark:border-cyan-900/70 dark:from-cyan-950/40 dark:to-slate-950">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-300">Active window</p>
-          <p className="mt-2 font-display text-2xl font-semibold">{daysInPreset} days</p>
+          <p className="mt-2 font-display text-3xl font-semibold">{daysInPreset} days</p>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Live scope for KPIs and table data.</p>
         </div>
 
+        <div className="mb-6 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+          {dashboardSummary.map((item) => (
+            <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/80">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{item.label}</p>
+              <p className="mt-2 font-display text-lg font-semibold text-slate-900 dark:text-slate-100">{item.value}</p>
+            </div>
+          ))}
+        </div>
+
         <section className="mb-6">
-          <h2 className="mb-3 font-display text-sm uppercase tracking-[0.2em] text-slate-500">Clients</h2>
+          <h2 className="mb-3 font-display text-sm uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Clients</h2>
           <div className="space-y-2">
             {clients.map((client) => (
               <button
@@ -182,10 +200,10 @@ function CampaignDashboard() {
                   setSelectedClient(client)
                   setSelectedCampaign('all')
                 }}
-                className={`w-full rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
+                className={`w-full rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition ${
                   selectedClient === client
-                    ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/20'
-                    : 'bg-slate-100 text-slate-700 hover:-translate-y-0.5 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                    ? 'bg-gradient-to-r from-cyan-600 to-sky-600 text-white shadow-md shadow-cyan-600/20'
+                    : 'bg-slate-100 text-slate-700 hover:-translate-y-0.5 hover:bg-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
                 }`}
               >
                 {client === 'all' ? 'All Clients' : client}
@@ -195,7 +213,7 @@ function CampaignDashboard() {
         </section>
 
         <section className="mb-6">
-          <h2 className="mb-3 font-display text-sm uppercase tracking-[0.2em] text-slate-500">Campaigns</h2>
+          <h2 className="mb-3 font-display text-sm uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Campaigns</h2>
           <div className="space-y-2">
             {campaignList.map((campaignId) => {
               const label =
@@ -208,10 +226,10 @@ function CampaignDashboard() {
                   key={campaignId}
                   type="button"
                   onClick={() => setSelectedCampaign(campaignId)}
-                  className={`w-full rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
+                  className={`w-full rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition ${
                     selectedCampaign === campaignId
-                      ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/20'
-                      : 'bg-slate-100 text-slate-700 hover:-translate-y-0.5 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                      ? 'bg-gradient-to-r from-cyan-600 to-sky-600 text-white shadow-md shadow-cyan-600/20'
+                      : 'bg-slate-100 text-slate-700 hover:-translate-y-0.5 hover:bg-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
                   }`}
                 >
                   {label}
@@ -222,12 +240,12 @@ function CampaignDashboard() {
         </section>
 
         <section>
-          <h2 className="mb-3 font-display text-sm uppercase tracking-[0.2em] text-slate-500">Settings</h2>
+          <h2 className="mb-3 font-display text-sm uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Settings</h2>
           <ul className="space-y-2">
             {data.sidebar.settings.map((setting) => (
               <li
                 key={setting}
-                className="rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                className="rounded-2xl bg-slate-100 px-3 py-2.5 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200"
               >
                 {setting}
               </li>
@@ -237,20 +255,20 @@ function CampaignDashboard() {
       </aside>
 
       <div className="space-y-4">
-        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-5 shadow-panel backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+        <section className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-5 shadow-panel backdrop-blur dark:border-slate-800 dark:bg-slate-950/70">
           <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Date range</label>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Date range</label>
               <div className="flex flex-wrap gap-2">
                 {data.datePresets.map((preset) => (
                   <button
                     key={preset.id}
                     type="button"
                     onClick={() => setSelectedPreset(preset.id)}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                       selectedPreset === preset.id
-                        ? 'bg-cyan-600 text-white'
-                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                        ? 'bg-gradient-to-r from-cyan-600 to-sky-600 text-white'
+                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
                     }`}
                   >
                     {preset.label}
@@ -263,24 +281,24 @@ function CampaignDashboard() {
                     type="date"
                     value={customStart}
                     onChange={(event) => setCustomStart(event.target.value)}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-950"
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
                   />
                   <input
                     type="date"
                     value={customEnd}
                     onChange={(event) => setCustomEnd(event.target.value)}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-950"
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
                   />
                 </div>
               )}
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Status filter</label>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Status filter</label>
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950"
               >
                 <option value="all">All statuses</option>
                 <option value="active">Active</option>
@@ -291,13 +309,13 @@ function CampaignDashboard() {
             </div>
 
             <div className="md:col-span-2">
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Search campaigns</label>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Search campaigns</label>
               <input
                 type="search"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search by campaign or client"
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950"
               />
             </div>
           </div>
@@ -306,17 +324,23 @@ function CampaignDashboard() {
             {metricCards.map((metric) => (
               <article
                 key={metric.key}
-                className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 dark:border-slate-800 dark:from-slate-900 dark:to-slate-950"
+                className="rounded-[1.5rem] border border-slate-200 bg-gradient-to-br from-white via-white to-slate-50 p-4 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950"
               >
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{metric.label}</p>
-                <p className="mt-2 font-display text-2xl font-semibold">{metric.format(aggregateMetrics[metric.key])}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{metric.label}</p>
+                <p className="mt-2 font-display text-2xl font-semibold text-slate-900 dark:text-slate-100">{metric.format(aggregateMetrics[metric.key])}</p>
               </article>
             ))}
           </div>
         </section>
 
-        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-5 shadow-panel backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
-          <h2 className="mb-3 font-display text-lg font-semibold">30-Day Performance Trend</h2>
+        <section className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-5 shadow-panel backdrop-blur dark:border-slate-800 dark:bg-slate-950/70">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Trend view</p>
+              <h2 className="font-display text-lg font-semibold">Performance trend</h2>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Comparing impressions, clicks, conversions, spend, and revenue.</p>
+          </div>
           <div className="h-[320px] w-full">
             <ResponsiveContainer>
               <LineChart data={trendData} margin={{ top: 10, right: 16, left: -18, bottom: 0 }}>
@@ -330,7 +354,7 @@ function CampaignDashboard() {
                     return [numberFormat.format(value), name]
                   }}
                   contentStyle={{
-                    borderRadius: '12px',
+                    borderRadius: '14px',
                     border: '1px solid #334155',
                     backgroundColor: '#0f172a',
                     color: '#f8fafc',
@@ -346,13 +370,13 @@ function CampaignDashboard() {
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/90 shadow-panel backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+        <section className="overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white/90 shadow-panel backdrop-blur dark:border-slate-800 dark:bg-slate-950/70">
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-100/90 dark:bg-slate-950">
+              <thead className="bg-slate-100/90 dark:bg-slate-900">
                 <tr>
                   {columnDefs.map((column) => (
-                    <th key={column.key} className="px-4 py-3">
+                    <th key={column.key} className="px-4 py-3.5">
                       <button
                         type="button"
                         onClick={() => toggleSort(column.key)}
@@ -368,9 +392,9 @@ function CampaignDashboard() {
                 {tableData.map((campaign) => (
                   <tr
                     key={campaign.id}
-                    className="border-t border-slate-200 transition hover:bg-cyan-50/50 dark:border-slate-800 dark:hover:bg-cyan-950/20"
+                    className="border-t border-slate-200 transition hover:bg-cyan-50/60 dark:border-slate-800 dark:hover:bg-cyan-950/20"
                   >
-                    <td className="px-4 py-3 font-semibold">{campaign.name}</td>
+                    <td className="px-4 py-3.5 font-semibold text-slate-900 dark:text-slate-100">{campaign.name}</td>
                     <td className="px-4 py-3">{campaign.client}</td>
                     <td className="px-4 py-3">
                       <span className={`rounded-full px-2 py-1 text-xs font-semibold capitalize ${statusStyles[campaign.status]}`}>
@@ -388,7 +412,7 @@ function CampaignDashboard() {
                 ))}
                 {tableData.length === 0 && (
                   <tr>
-                    <td colSpan={columnDefs.length} className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+                    <td colSpan={columnDefs.length} className="px-4 py-12 text-center text-sm text-slate-500 dark:text-slate-400">
                       No campaigns match your current filters.
                     </td>
                   </tr>

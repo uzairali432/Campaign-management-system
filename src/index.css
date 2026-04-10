@@ -5,6 +5,14 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
   html,
   body,
   #root {
@@ -17,6 +25,7 @@
       radial-gradient(circle at 10% 10%, rgba(34, 211, 238, 0.16), transparent 28%),
       radial-gradient(circle at 90% 10%, rgba(251, 146, 60, 0.2), transparent 28%),
       linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+    line-height: 1.5;
   }
 
   .dark body {
@@ -24,5 +33,10 @@
       radial-gradient(circle at 10% 10%, rgba(34, 211, 238, 0.18), transparent 26%),
       radial-gradient(circle at 90% 20%, rgba(234, 179, 8, 0.18), transparent 24%),
       linear-gradient(180deg, #020617 0%, #111827 100%);
+  }
+
+  ::selection {
+    background: rgba(34, 211, 238, 0.22);
+    color: inherit;
   }
 }
