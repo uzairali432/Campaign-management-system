@@ -31,4 +31,3 @@ npm install
 cd ../client
 npm install
 
-created by Uzair Ali
