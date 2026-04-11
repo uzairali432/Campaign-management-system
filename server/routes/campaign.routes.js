@@ -3,6 +3,41 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const Campaign = require('../models/campaign.model');
 
+const CAMPAIGN_STATUS = {
+  DRAFT: 'draft',
+  PENDING_APPROVAL: 'pending_approval',
+  ACTIVE: 'active',
+  PAUSED: 'paused',
+  COMPLETED: 'completed',
+};
+
+const STATUS_TRANSITIONS = {
+  [CAMPAIGN_STATUS.DRAFT]: [CAMPAIGN_STATUS.PENDING_APPROVAL],
+  [CAMPAIGN_STATUS.PENDING_APPROVAL]: [CAMPAIGN_STATUS.DRAFT, CAMPAIGN_STATUS.ACTIVE],
+  [CAMPAIGN_STATUS.ACTIVE]: [CAMPAIGN_STATUS.PAUSED, CAMPAIGN_STATUS.COMPLETED],
+  [CAMPAIGN_STATUS.PAUSED]: [CAMPAIGN_STATUS.ACTIVE, CAMPAIGN_STATUS.COMPLETED],
+  [CAMPAIGN_STATUS.COMPLETED]: [],
+};
+
+const normalizeStatus = (value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  return value.trim().toLowerCase().replace(/\s+/g, '_');
+};
+
+const statusLabel = (status) => status.replace(/_/g, ' ');
+
+const isValidTransition = (currentStatus, nextStatus) => {
+  if (currentStatus === nextStatus) {
+    return true;
+  }
+
+  const allowedNext = STATUS_TRANSITIONS[currentStatus] || [];
+  return allowedNext.includes(nextStatus);
+};
+
 const canAccessCampaign = (campaign, user) => {
   if (!campaign || !user) {
     return false;
@@ -54,15 +89,22 @@ router.post('/', protect, async (req, res, next) => {
     }
 
     const { name, client, status, budget, spend, startDate, endDate } = req.body;
+    const normalizedStatus = normalizeStatus(status);
 
     if (!name || !client) {
       return res.status(400).json({ message: 'Name and client are required' });
     }
 
+    if (normalizedStatus && normalizedStatus !== CAMPAIGN_STATUS.DRAFT) {
+      return res.status(400).json({
+        message: `New campaigns must start as ${statusLabel(CAMPAIGN_STATUS.DRAFT)}.`,
+      });
+    }
+
     const campaign = await Campaign.create({
       name,
       client,
-      status,
+      status: CAMPAIGN_STATUS.DRAFT,
       budget,
       spend,
       startDate,
@@ -103,9 +145,23 @@ router.put('/:id', protect, async (req, res, next) => {
       'endDate',
     ];
 
+    if (Object.prototype.hasOwnProperty.call(req.body, 'status')) {
+      const nextStatus = normalizeStatus(req.body.status);
+
+      if (!Object.values(CAMPAIGN_STATUS).includes(nextStatus)) {
+        return res.status(400).json({ message: 'Invalid campaign status.' });
+      }
+
+      if (!isValidTransition(campaign.status, nextStatus)) {
+        return res.status(400).json({
+          message: `Invalid status transition from ${statusLabel(campaign.status)} to ${statusLabel(nextStatus)}.`,
+        });
+      }
+    }
+
     allowedUpdates.forEach((field) => {
       if (Object.prototype.hasOwnProperty.call(req.body, field)) {
-        campaign[field] = req.body[field];
+        campaign[field] = field === 'status' ? normalizeStatus(req.body[field]) : req.body[field];
       }
     });
 

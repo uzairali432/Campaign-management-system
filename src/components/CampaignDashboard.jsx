@@ -11,11 +11,22 @@ import {
 import data from '../data/mockData.json'
 
 const statusStyles = {
+  pending_approval: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
   active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
   paused: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
   completed: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
   draft: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
 }
+
+const statusOptions = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'pending_approval', label: 'Pending Approval' },
+  { value: 'active', label: 'Active' },
+  { value: 'paused', label: 'Paused' },
+  { value: 'completed', label: 'Completed' },
+]
+
+const formatStatusLabel = (status) => status.replace(/_/g, ' ')
 
 const numberFormat = new Intl.NumberFormat('en-US')
 const currencyFormat = new Intl.NumberFormat('en-US', {
@@ -301,10 +312,9 @@ function CampaignDashboard() {
                 className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950"
               >
                 <option value="all">All statuses</option>
-                <option value="active">Active</option>
-                <option value="paused">Paused</option>
-                <option value="completed">Completed</option>
-                <option value="draft">Draft</option>
+                {statusOptions.map((statusOption) => (
+                  <option key={statusOption.value} value={statusOption.value}>{statusOption.label}</option>
+                ))}
               </select>
             </div>
 
@@ -397,8 +407,8 @@ function CampaignDashboard() {
                     <td className="px-4 py-3.5 font-semibold text-slate-900 dark:text-slate-100">{campaign.name}</td>
                     <td className="px-4 py-3">{campaign.client}</td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-1 text-xs font-semibold capitalize ${statusStyles[campaign.status]}`}>
-                        {campaign.status}
+                      <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusStyles[campaign.status] || statusStyles.draft}`}>
+                        {formatStatusLabel(campaign.status)}
                       </span>
                     </td>
                     <td className="px-4 py-3">{currencyFormat.format(campaign.budget)}</td>

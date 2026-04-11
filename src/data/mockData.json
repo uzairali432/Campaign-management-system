@@ -78,7 +78,7 @@
       "id": "c006",
       "name": "PulseFit Referral Burst",
       "client": "PulseFit",
-      "status": "draft",
+      "status": "pending_approval",
       "budget": 18000,
       "spend": 3950,
       "revenue": 9020,
