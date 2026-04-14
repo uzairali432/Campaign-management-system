@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   CartesianGrid,
   Line,
@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import data from '../data/mockData.json'
+import { fetchCampaigns } from '../lib/campaignApi'
 
 const statusStyles = {
   pending_approval: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
@@ -57,7 +57,108 @@ const columnDefs = [
   { key: 'roas', label: 'ROAS' },
 ]
 
+const tokenStorageKey = 'ads-dashboard-token'
+
+const toNumber = (value) => Number(value || 0)
+
+const normalizeDateKey = (value) => {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return null
+  }
+
+  return date.toISOString().slice(0, 10)
+}
+
+const buildDateRange = (preset, customStart, customEnd) => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  if (preset === 'custom') {
+    const start = new Date(customStart)
+    const end = new Date(customEnd)
+    start.setHours(0, 0, 0, 0)
+    end.setHours(0, 0, 0, 0)
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return { start: today, end: today, days: 1 }
+    }
+
+    const normalizedStart = start <= end ? start : end
+    const normalizedEnd = start <= end ? end : start
+    const dayDiff = Math.floor((normalizedEnd - normalizedStart) / (1000 * 60 * 60 * 24)) + 1
+
+    return {
+      start: normalizedStart,
+      end: normalizedEnd,
+      days: Math.max(dayDiff, 1),
+    }
+  }
+
+  const presetDays = { '7d': 7, '30d': 30, '90d': 90 }[preset] || 30
+  const start = new Date(today)
+  start.setDate(today.getDate() - (presetDays - 1))
+
+  return { start, end: today, days: presetDays }
+}
+
+const buildTrendData = (campaigns, startDate, endDate) => {
+  const startKey = startDate.toISOString().slice(0, 10)
+  const endKey = endDate.toISOString().slice(0, 10)
+  const buckets = new Map()
+
+  for (const campaign of campaigns) {
+    const dateKey = normalizeDateKey(campaign.updatedAt || campaign.lastUpdated || campaign.createdAt)
+
+    if (!dateKey || dateKey < startKey || dateKey > endKey) {
+      continue
+    }
+
+    const bucket = buckets.get(dateKey) || {
+      date: dateKey,
+      impressions: 0,
+      clicks: 0,
+      conversions: 0,
+      spend: 0,
+      revenue: 0,
+    }
+
+    bucket.impressions += toNumber(campaign.impressions)
+    bucket.clicks += toNumber(campaign.clicks)
+    bucket.conversions += toNumber(campaign.conversions)
+    bucket.spend += toNumber(campaign.spend)
+    bucket.revenue += toNumber(campaign.revenue)
+    buckets.set(dateKey, bucket)
+  }
+
+  const result = []
+  const cursor = new Date(startDate)
+
+  while (cursor <= endDate) {
+    const dateKey = cursor.toISOString().slice(0, 10)
+    result.push(
+      buckets.get(dateKey) || {
+        date: dateKey,
+        impressions: 0,
+        clicks: 0,
+        conversions: 0,
+        spend: 0,
+        revenue: 0,
+      },
+    )
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return result
+}
+
 function CampaignDashboard() {
+  const [apiTokenDraft, setApiTokenDraft] = useState(() => localStorage.getItem(tokenStorageKey) || '')
+  const [apiToken, setApiToken] = useState(() => localStorage.getItem(tokenStorageKey) || '')
+  const [campaigns, setCampaigns] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [selectedClient, setSelectedClient] = useState('all')
   const [selectedCampaign, setSelectedCampaign] = useState('all')
   const [selectedPreset, setSelectedPreset] = useState('30d')
@@ -67,65 +168,96 @@ function CampaignDashboard() {
   const [customEnd, setCustomEnd] = useState('2026-04-01')
   const [sortConfig, setSortConfig] = useState({ key: 'spend', direction: 'desc' })
 
+  useEffect(() => {
+    if (apiToken) {
+      localStorage.setItem(tokenStorageKey, apiToken)
+    } else {
+      localStorage.removeItem(tokenStorageKey)
+    }
+  }, [apiToken])
+
+  useEffect(() => {
+    let isActive = true
+
+    const loadCampaigns = async () => {
+      if (!apiToken) {
+        setCampaigns([])
+        setLoadError('Add a JWT access token to load live campaigns from MongoDB.')
+        setIsLoading(false)
+        return
+      }
+
+      setIsLoading(true)
+      setLoadError('')
+
+      try {
+        const response = await fetchCampaigns(apiToken)
+
+        if (!isActive) {
+          return
+        }
+
+        setCampaigns(response.campaigns || [])
+      } catch (error) {
+        if (!isActive) {
+          return
+        }
+
+        setCampaigns([])
+        setLoadError(error.message)
+      } finally {
+        if (isActive) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadCampaigns()
+
+    return () => {
+      isActive = false
+    }
+  }, [apiToken])
+
   const clients = useMemo(
-    () => ['all', ...new Set(data.campaigns.map((campaign) => campaign.client))],
-    [],
+    () => ['all', ...new Set(campaigns.map((campaign) => campaign.client).filter(Boolean))],
+    [campaigns],
   )
 
   const campaignList = useMemo(() => {
     const filteredByClient =
       selectedClient === 'all'
-        ? data.campaigns
-        : data.campaigns.filter((campaign) => campaign.client === selectedClient)
+        ? campaigns
+        : campaigns.filter((campaign) => campaign.client === selectedClient)
 
     return ['all', ...filteredByClient.map((campaign) => campaign.id)]
-  }, [selectedClient])
+  }, [campaigns, selectedClient])
 
-  const daysInPreset = useMemo(() => {
-    if (selectedPreset === 'custom') {
-      const start = new Date(customStart)
-      const end = new Date(customEnd)
-      const dayDiff = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1
-      return dayDiff > 0 ? dayDiff : 1
-    }
+  const dateRange = useMemo(
+    () => buildDateRange(selectedPreset, customStart, customEnd),
+    [selectedPreset, customStart, customEnd],
+  )
 
-    const preset = data.datePresets.find((item) => item.id === selectedPreset)
-    return preset?.days ?? 30
-  }, [selectedPreset, customStart, customEnd])
+  const daysInPreset = dateRange.days
 
   const scopedCampaigns = useMemo(() => {
-    const rangeFactor = Math.min(daysInPreset / 90, 1)
-
-    return data.campaigns
+    return campaigns
       .filter((campaign) => selectedClient === 'all' || campaign.client === selectedClient)
       .filter((campaign) => selectedCampaign === 'all' || campaign.id === selectedCampaign)
-      .map((campaign) => ({
-        ...campaign,
-        spend: Math.round(campaign.spend * rangeFactor),
-        impressions: Math.round(campaign.impressions * rangeFactor),
-        clicks: Math.round(campaign.clicks * rangeFactor),
-        conversions: Math.round(campaign.conversions * rangeFactor),
-        revenue: Math.round(campaign.revenue * rangeFactor),
-      }))
-  }, [selectedClient, selectedCampaign, daysInPreset])
+  }, [campaigns, selectedClient, selectedCampaign])
 
   const trendData = useMemo(() => {
-    if (selectedPreset === 'custom') {
-      return data.trend.filter((point) => point.date >= customStart && point.date <= customEnd)
-    }
-
-    const days = data.datePresets.find((item) => item.id === selectedPreset)?.days ?? 30
-    return data.trend.slice(-days)
-  }, [selectedPreset, customStart, customEnd])
+    return buildTrendData(scopedCampaigns, dateRange.start, dateRange.end)
+  }, [scopedCampaigns, dateRange])
 
   const aggregateMetrics = useMemo(() => {
     const metrics = scopedCampaigns.reduce(
       (acc, campaign) => {
-        acc.impressions += campaign.impressions
-        acc.clicks += campaign.clicks
-        acc.conversions += campaign.conversions
-        acc.spend += campaign.spend
-        acc.revenue += campaign.revenue
+        acc.impressions += toNumber(campaign.impressions)
+        acc.clicks += toNumber(campaign.clicks)
+        acc.conversions += toNumber(campaign.conversions)
+        acc.spend += toNumber(campaign.spend)
+        acc.revenue += toNumber(campaign.revenue)
         return acc
       },
       { impressions: 0, clicks: 0, conversions: 0, spend: 0, revenue: 0 },
@@ -151,8 +283,8 @@ function CampaignDashboard() {
     const searched = scopedCampaigns
       .map((campaign) => ({
         ...campaign,
-        ctr: campaign.impressions > 0 ? (campaign.clicks / campaign.impressions) * 100 : 0,
-        roas: campaign.spend > 0 ? campaign.revenue / campaign.spend : 0,
+        ctr: toNumber(campaign.impressions) > 0 ? (toNumber(campaign.clicks) / toNumber(campaign.impressions)) * 100 : 0,
+        roas: toNumber(campaign.spend) > 0 ? toNumber(campaign.revenue) / toNumber(campaign.spend) : 0,
       }))
       .filter((campaign) => statusFilter === 'all' || campaign.status === statusFilter)
       .filter(
@@ -174,6 +306,27 @@ function CampaignDashboard() {
       return sortConfig.direction === 'asc' ? compare : -compare
     })
   }, [scopedCampaigns, statusFilter, searchTerm, sortConfig])
+
+  useEffect(() => {
+    if (selectedClient !== 'all' && !clients.includes(selectedClient)) {
+      setSelectedClient('all')
+    }
+  }, [clients, selectedClient])
+
+  useEffect(() => {
+    if (selectedCampaign !== 'all' && !campaignList.includes(selectedCampaign)) {
+      setSelectedCampaign('all')
+    }
+  }, [campaignList, selectedCampaign])
+
+  const handleConnectToken = () => {
+    setApiToken(apiTokenDraft.trim())
+  }
+
+  const handleDisconnectToken = () => {
+    setApiTokenDraft('')
+    setApiToken('')
+  }
 
   const toggleSort = (key) => {
     setSortConfig((current) => ({
@@ -230,7 +383,7 @@ function CampaignDashboard() {
               const label =
                 campaignId === 'all'
                   ? 'All Campaigns'
-                  : data.campaigns.find((campaign) => campaign.id === campaignId)?.name
+                  : campaigns.find((campaign) => campaign.id === campaignId)?.name || campaignId
 
               return (
                 <button
@@ -250,28 +403,63 @@ function CampaignDashboard() {
           </div>
         </section>
 
-        <section>
-          <h2 className="mb-3 font-display text-sm uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Settings</h2>
-          <ul className="space-y-2">
-            {data.sidebar.settings.map((setting) => (
-              <li
-                key={setting}
-                className="rounded-2xl bg-slate-100 px-3 py-2.5 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200"
+        <section className="mb-6">
+          <h2 className="mb-3 font-display text-sm uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Live API</h2>
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/70">
+            <input
+              type="password"
+              value={apiTokenDraft}
+              onChange={(event) => setApiTokenDraft(event.target.value)}
+              placeholder="Paste JWT access token"
+              className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950"
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleConnectToken}
+                className="rounded-full bg-gradient-to-r from-cyan-600 to-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-cyan-500/20"
               >
-                {setting}
-              </li>
-            ))}
-          </ul>
+                Connect
+              </button>
+              <button
+                type="button"
+                onClick={handleDisconnectToken}
+                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold transition hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+              >
+                Clear
+              </button>
+            </div>
+            <p className={`text-xs ${apiToken ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
+              {apiToken ? 'Connected to the live campaign API.' : 'Enter a JWT to load campaigns from MongoDB.'}
+            </p>
+          </div>
         </section>
       </aside>
 
       <div className="space-y-4">
         <section className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-5 shadow-panel backdrop-blur dark:border-slate-800 dark:bg-slate-950/70">
+          {loadError && (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-100 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/40 dark:text-amber-200">
+              {loadError}
+            </div>
+          )}
+
+          {isLoading && (
+            <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+              Loading live campaigns...
+            </div>
+          )}
+
           <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Date range</label>
               <div className="flex flex-wrap gap-2">
-                {data.datePresets.map((preset) => (
+                {[
+                  { id: '7d', label: 'Last 7d' },
+                  { id: '30d', label: 'Last 30d' },
+                  { id: '90d', label: 'Last 90d' },
+                  { id: 'custom', label: 'Custom' },
+                ].map((preset) => (
                   <button
                     key={preset.id}
                     type="button"
@@ -360,7 +548,7 @@ function CampaignDashboard() {
                 <Tooltip
                   formatter={(value, name) => {
                     if (name === 'Spend') return [currencyFormat.format(value), name]
-                    if (name === 'ROAS Revenue') return [currencyFormat.format(value), name]
+                    if (name === 'Revenue') return [currencyFormat.format(value), name]
                     return [numberFormat.format(value), name]
                   }}
                   contentStyle={{
@@ -374,7 +562,7 @@ function CampaignDashboard() {
                 <Line type="monotone" dataKey="clicks" stroke="#f97316" strokeWidth={2.4} dot={false} name="Clicks" />
                 <Line type="monotone" dataKey="conversions" stroke="#14b8a6" strokeWidth={2.4} dot={false} name="Conversions" />
                 <Line type="monotone" dataKey="spend" stroke="#a855f7" strokeWidth={2.4} dot={false} name="Spend" />
-                <Line type="monotone" dataKey="revenue" stroke="#22c55e" strokeWidth={2.4} dot={false} name="ROAS Revenue" />
+                <Line type="monotone" dataKey="revenue" stroke="#22c55e" strokeWidth={2.4} dot={false} name="Revenue" />
               </LineChart>
             </ResponsiveContainer>
           </div>

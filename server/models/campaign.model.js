@@ -125,6 +125,26 @@ const campaignSchema = new mongoose.Schema(
       min: 0,
       default: 0,
     },
+    impressions: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    clicks: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    conversions: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    revenue: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
     startDate: {
       type: Date,
     },

@@ -158,7 +158,20 @@ router.post('/', protect, async (req, res, next) => {
       return res.status(403).json({ message: 'Viewers cannot create campaigns' });
     }
 
-    const { name, client, audience, status, budget, spend, startDate, endDate } = req.body;
+    const {
+      name,
+      client,
+      audience,
+      status,
+      budget,
+      spend,
+      impressions,
+      clicks,
+      conversions,
+      revenue,
+      startDate,
+      endDate,
+    } = req.body;
     const normalizedStatus = normalizeStatus(status);
 
     if (!name || !client) {
@@ -185,6 +198,10 @@ router.post('/', protect, async (req, res, next) => {
       status: CAMPAIGN_STATUS.DRAFT,
       budget,
       spend,
+      impressions,
+      clicks,
+      conversions,
+      revenue,
       startDate,
       endDate,
       createdBy: req.user.id,
@@ -229,6 +246,10 @@ router.put('/:id', protect, async (req, res, next) => {
       'status',
       'budget',
       'spend',
+      'impressions',
+      'clicks',
+      'conversions',
+      'revenue',
       'startDate',
       'endDate',
     ];
