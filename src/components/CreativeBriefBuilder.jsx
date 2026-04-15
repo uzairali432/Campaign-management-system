@@ -19,7 +19,7 @@ const initialForm = {
   dosAndDonts: '',
 }
 
-function CreativeBriefBuilder() {
+function CreativeBriefBuilder({ currentUser }) {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState(initialForm)
   const [provider, setProvider] = useState('openai')
@@ -55,8 +55,14 @@ function CreativeBriefBuilder() {
   const prevStep = () => setStep((current) => Math.max(1, current - 1))
 
   const stepLabels = ['Project', 'Strategy', 'Direction', 'Review']
+  const isViewer = currentUser?.role === 'viewer'
 
   const handleSubmit = async () => {
+    if (isViewer) {
+      setError('Viewer accounts cannot generate creative directions. Contact an admin or manager.')
+      return
+    }
+
     setIsSubmitting(true)
     setError('')
 
@@ -182,6 +188,12 @@ function CreativeBriefBuilder() {
 
         {error && <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-100 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/40 dark:text-amber-200">{error}</p>}
 
+        {isViewer && (
+          <p className="mt-4 rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+            Role restriction: viewers can review briefs but cannot generate AI output.
+          </p>
+        )}
+
         <div className="mt-5 flex flex-wrap gap-2">
           {step > 1 && (
             <button type="button" onClick={prevStep} className="rounded-full border border-slate-300 px-4 py-2.5 text-sm font-semibold transition hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">Back</button>
@@ -190,7 +202,7 @@ function CreativeBriefBuilder() {
             <button type="button" onClick={nextStep} className="rounded-full bg-gradient-to-r from-cyan-600 to-sky-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-cyan-500/20">Continue</button>
           )}
           {step === 4 && (
-            <button type="button" onClick={handleSubmit} disabled={isSubmitting} className="rounded-full bg-gradient-to-r from-cyan-600 to-sky-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-cyan-500/20 disabled:opacity-60">
+            <button type="button" onClick={handleSubmit} disabled={isSubmitting || isViewer} className="rounded-full bg-gradient-to-r from-cyan-600 to-sky-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-cyan-500/20 disabled:opacity-60">
               {isSubmitting ? 'Generating...' : 'Generate Creative Direction'}
             </button>
           )}

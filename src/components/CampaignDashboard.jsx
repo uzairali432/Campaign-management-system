@@ -57,8 +57,6 @@ const columnDefs = [
   { key: 'roas', label: 'ROAS' },
 ]
 
-const tokenStorageKey = 'ads-dashboard-token'
-
 const toNumber = (value) => Number(value || 0)
 
 const normalizeDateKey = (value) => {
@@ -153,9 +151,7 @@ const buildTrendData = (campaigns, startDate, endDate) => {
   return result
 }
 
-function CampaignDashboard() {
-  const [apiTokenDraft, setApiTokenDraft] = useState(() => localStorage.getItem(tokenStorageKey) || '')
-  const [apiToken, setApiToken] = useState(() => localStorage.getItem(tokenStorageKey) || '')
+function CampaignDashboard({ token, currentUser }) {
   const [campaigns, setCampaigns] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
@@ -169,20 +165,12 @@ function CampaignDashboard() {
   const [sortConfig, setSortConfig] = useState({ key: 'spend', direction: 'desc' })
 
   useEffect(() => {
-    if (apiToken) {
-      localStorage.setItem(tokenStorageKey, apiToken)
-    } else {
-      localStorage.removeItem(tokenStorageKey)
-    }
-  }, [apiToken])
-
-  useEffect(() => {
     let isActive = true
 
     const loadCampaigns = async () => {
-      if (!apiToken) {
+      if (!token) {
         setCampaigns([])
-        setLoadError('Add a JWT access token to load live campaigns from MongoDB.')
+        setLoadError('Your session expired. Please sign in again.')
         setIsLoading(false)
         return
       }
@@ -191,13 +179,24 @@ function CampaignDashboard() {
       setLoadError('')
 
       try {
-        const response = await fetchCampaigns(apiToken)
+        const response = await fetchCampaigns(token)
 
         if (!isActive) {
           return
         }
 
-        setCampaigns(response.campaigns || [])
+        setCampaigns(
+          (response.campaigns || []).map((campaign) => ({
+            ...campaign,
+            id: campaign.id || campaign._id,
+            budget: toNumber(campaign.budget),
+            spend: toNumber(campaign.spend),
+            impressions: toNumber(campaign.impressions),
+            clicks: toNumber(campaign.clicks),
+            conversions: toNumber(campaign.conversions),
+            revenue: toNumber(campaign.revenue),
+          })),
+        )
       } catch (error) {
         if (!isActive) {
           return
@@ -217,7 +216,7 @@ function CampaignDashboard() {
     return () => {
       isActive = false
     }
-  }, [apiToken])
+  }, [token])
 
   const clients = useMemo(
     () => ['all', ...new Set(campaigns.map((campaign) => campaign.client).filter(Boolean))],
@@ -319,15 +318,6 @@ function CampaignDashboard() {
     }
   }, [campaignList, selectedCampaign])
 
-  const handleConnectToken = () => {
-    setApiToken(apiTokenDraft.trim())
-  }
-
-  const handleDisconnectToken = () => {
-    setApiTokenDraft('')
-    setApiToken('')
-  }
-
   const toggleSort = (key) => {
     setSortConfig((current) => ({
       key,
@@ -404,34 +394,15 @@ function CampaignDashboard() {
         </section>
 
         <section className="mb-6">
-          <h2 className="mb-3 font-display text-sm uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Live API</h2>
-          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/70">
-            <input
-              type="password"
-              value={apiTokenDraft}
-              onChange={(event) => setApiTokenDraft(event.target.value)}
-              placeholder="Paste JWT access token"
-              className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950"
-            />
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={handleConnectToken}
-                className="rounded-full bg-gradient-to-r from-cyan-600 to-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-cyan-500/20"
-              >
-                Connect
-              </button>
-              <button
-                type="button"
-                onClick={handleDisconnectToken}
-                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold transition hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-              >
-                Clear
-              </button>
-            </div>
-            <p className={`text-xs ${apiToken ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-              {apiToken ? 'Connected to the live campaign API.' : 'Enter a JWT to load campaigns from MongoDB.'}
-            </p>
+          <h2 className="mb-3 font-display text-sm uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Access</h2>
+          <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm dark:border-slate-800 dark:bg-slate-900/70">
+            <p className="text-slate-700 dark:text-slate-200">Signed in as {currentUser?.name || 'User'}</p>
+            <p className="capitalize text-slate-600 dark:text-slate-300">Role: {currentUser?.role || 'viewer'}</p>
+            {currentUser?.role === 'viewer' && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Viewer mode is read-only. Campaign edits and deletions are restricted by backend policy.
+              </p>
+            )}
           </div>
         </section>
       </aside>
