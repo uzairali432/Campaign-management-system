@@ -204,7 +204,6 @@ router.get('/', protect, async (req, res, next) => {
     return res.status(200).json({
       count: total,
       pageCount: campaigns.length,
-      total,
       page,
       limit,
       totalPages,
