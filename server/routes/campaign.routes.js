@@ -189,12 +189,14 @@ router.get('/', protect, async (req, res, next) => {
       }));
     }
 
-    const total = await Campaign.countDocuments(query);
-    const campaigns = await Campaign.find(query)
-      .select('-comments -activity')
-      .sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 })
-      .skip((page - 1) * limit)
-      .limit(limit);
+    const [total, campaigns] = await Promise.all([
+      Campaign.countDocuments(query),
+      Campaign.find(query)
+        .select('-comments -activity')
+        .sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+    ]);
 
     const totalPages = Math.ceil(total / limit);
 
