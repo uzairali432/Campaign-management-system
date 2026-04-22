@@ -19,6 +19,7 @@ const STATUS_TRANSITIONS = {
   [CAMPAIGN_STATUS.PAUSED]: [CAMPAIGN_STATUS.ACTIVE, CAMPAIGN_STATUS.COMPLETED],
   [CAMPAIGN_STATUS.COMPLETED]: [],
 };
+const MAX_PAGE_LIMIT = 100;
 
 const normalizeStatus = (value) => {
   if (typeof value !== 'string') {
@@ -140,8 +141,8 @@ router.get('/', protect, async (req, res, next) => {
     const client = String(req.query.client || '').trim();
     const search = String(req.query.search || '').trim();
 
-    if (limit > 100) {
-      return res.status(400).json({ message: 'Limit must not exceed 100.' });
+    if (limit > MAX_PAGE_LIMIT) {
+      return res.status(400).json({ message: `Limit must not exceed ${MAX_PAGE_LIMIT}.` });
     }
 
     const allowedSortFields = new Set([
@@ -201,7 +202,8 @@ router.get('/', protect, async (req, res, next) => {
     const totalPages = Math.ceil(total / limit);
 
     return res.status(200).json({
-      count: campaigns.length,
+      count: total,
+      pageCount: campaigns.length,
       total,
       page,
       limit,
