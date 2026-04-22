@@ -19,6 +19,7 @@ const STATUS_TRANSITIONS = {
   [CAMPAIGN_STATUS.PAUSED]: [CAMPAIGN_STATUS.ACTIVE, CAMPAIGN_STATUS.COMPLETED],
   [CAMPAIGN_STATUS.COMPLETED]: [],
 };
+const MAX_PAGE_LIMIT = 100;
 
 const normalizeStatus = (value) => {
   if (typeof value !== 'string') {
@@ -34,6 +35,17 @@ const normalizeText = (value) =>
   String(value || '')
     .trim()
     .toLowerCase();
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const parsePositiveInteger = (value, fallback) => {
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return parsed;
+};
 
 const toMentionHandle = (value) => normalizeText(value).replace(/[^a-z0-9]/g, '');
 
@@ -121,12 +133,82 @@ const canAccessCampaign = (campaign, user) => {
 // GET /api/campaigns
 router.get('/', protect, async (req, res, next) => {
   try {
-    const query = req.user.role === 'admin' ? {} : { createdBy: req.user.id };
-    const campaigns = await Campaign.find(query)
-      .select('-comments -activity')
-      .sort({ createdAt: -1 });
+    const page = parsePositiveInteger(req.query.page, 1);
+    const limit = parsePositiveInteger(req.query.limit, 20);
+    const sortBy = String(req.query.sortBy || 'createdAt').trim();
+    const sortOrder = String(req.query.sortOrder || 'desc').trim().toLowerCase();
+    const status = String(req.query.status || '').trim();
+    const client = String(req.query.client || '').trim();
+    const search = String(req.query.search || '').trim();
 
-    return res.status(200).json({ count: campaigns.length, campaigns });
+    if (limit > MAX_PAGE_LIMIT) {
+      return res.status(400).json({ message: `Limit must not exceed ${MAX_PAGE_LIMIT}.` });
+    }
+
+    const allowedSortFields = new Set([
+      'name',
+      'client',
+      'status',
+      'budget',
+      'spend',
+      'impressions',
+      'clicks',
+      'conversions',
+      'revenue',
+      'startDate',
+      'endDate',
+      'createdAt',
+      'updatedAt',
+    ]);
+
+    if (!allowedSortFields.has(sortBy)) {
+      return res.status(400).json({ message: 'Invalid sortBy field.' });
+    }
+
+    if (!['asc', 'desc'].includes(sortOrder)) {
+      return res.status(400).json({ message: 'sortOrder must be either asc or desc.' });
+    }
+
+    const query = req.user.role === 'admin' ? {} : { createdBy: req.user.id };
+
+    if (status && status.toLowerCase() !== 'all') {
+      const normalizedStatus = normalizeStatus(status);
+      if (!Object.values(CAMPAIGN_STATUS).includes(normalizedStatus)) {
+        return res.status(400).json({ message: 'Invalid campaign status filter.' });
+      }
+      query.status = normalizedStatus;
+    }
+
+    if (client && client.toLowerCase() !== 'all') {
+      query.client = { $regex: new RegExp(`^${escapeRegex(client)}$`, 'i') };
+    }
+
+    if (search) {
+      const escapedSearch = escapeRegex(search);
+      query.$or = ['name', 'client', 'audience'].map((field) => ({
+        [field]: { $regex: escapedSearch, $options: 'i' },
+      }));
+    }
+
+    const [total, campaigns] = await Promise.all([
+      Campaign.countDocuments(query),
+      Campaign.find(query)
+        .select('-comments -activity')
+        .sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    return res.status(200).json({
+      count: total,
+      pageCount: campaigns.length,
+      page,
+      limit,
+      totalPages,
+      campaigns,
+    });
   } catch (error) {
     return next(error);
   }
