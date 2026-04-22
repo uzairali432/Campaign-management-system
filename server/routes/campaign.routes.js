@@ -39,7 +39,7 @@ const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const parsePositiveInteger = (value, fallback) => {
   const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed)) {
+  if (Number.isNaN(parsed) || parsed < 1) {
     return fallback;
   }
 
@@ -140,10 +140,6 @@ router.get('/', protect, async (req, res, next) => {
     const client = String(req.query.client || '').trim();
     const search = String(req.query.search || '').trim();
 
-    if (page < 1 || limit < 1) {
-      return res.status(400).json({ message: 'Page and limit must be positive integers.' });
-    }
-
     if (limit > 100) {
       return res.status(400).json({ message: 'Limit must not exceed 100.' });
     }
@@ -200,7 +196,7 @@ router.get('/', protect, async (req, res, next) => {
       .skip((page - 1) * limit)
       .limit(limit);
 
-    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+    const totalPages = Math.ceil(total / limit);
 
     return res.status(200).json({
       count: campaigns.length,
