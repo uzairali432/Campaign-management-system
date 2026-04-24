@@ -565,7 +565,7 @@ router.post('/:id/assets', protect, upload.single('file'), async (req, res, next
   try {
     if (req.user.role === 'viewer') {
       if (req.file) {
-        fs.unlink(req.file.path, () => {});
+        fs.unlink(path.join(uploadsDir, path.basename(req.file.filename)), () => {});
       }
       return res.status(403).json({ message: 'Viewers cannot upload assets' });
     }
@@ -577,12 +577,12 @@ router.post('/:id/assets', protect, upload.single('file'), async (req, res, next
     const campaign = await Campaign.findById(req.params.id);
 
     if (!campaign) {
-      fs.unlink(req.file.path, () => {});
+      fs.unlink(path.join(uploadsDir, path.basename(req.file.filename)), () => {});
       return res.status(404).json({ message: 'Campaign not found' });
     }
 
     if (!canAccessCampaign(campaign, req.user)) {
-      fs.unlink(req.file.path, () => {});
+      fs.unlink(path.join(uploadsDir, path.basename(req.file.filename)), () => {});
       return res.status(403).json({ message: 'Forbidden' });
     }
 
@@ -608,7 +608,7 @@ router.post('/:id/assets', protect, upload.single('file'), async (req, res, next
     return res.status(201).json({ message: 'Asset uploaded successfully', asset });
   } catch (error) {
     if (req.file) {
-      fs.unlink(req.file.path, () => {});
+      fs.unlink(path.join(uploadsDir, path.basename(req.file.filename)), () => {});
     }
     return next(error);
   }
@@ -637,7 +637,7 @@ router.delete('/:id/assets/:assetId', protect, async (req, res, next) => {
       return res.status(404).json({ message: 'Asset not found' });
     }
 
-    const filePath = path.join(uploadsDir, asset.filename);
+    const filePath = path.join(uploadsDir, path.basename(asset.filename));
 
     campaign.assets.pull(req.params.assetId);
     await campaign.save();

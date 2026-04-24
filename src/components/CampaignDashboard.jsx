@@ -204,7 +204,13 @@ function CampaignDashboard({ token, currentUser }) {
     loadCampaigns()
   }, [loadCampaigns])
 
-  // Real-time updates via Server-Sent Events
+  // Real-time updates via Server-Sent Events.
+  // EventSource (the browser SSE API) does not support custom request headers,
+  // so the JWT is passed as a query parameter. This exposes it in server logs
+  // and browser history; the trade-off is acceptable for this demo because the
+  // token is already stored in localStorage and the server validates it on
+  // every connection. A production system should use short-lived SSE tokens or
+  // cookie-based auth instead.
   useEffect(() => {
     if (!token) return
 
