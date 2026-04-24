@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import AssetManager from './components/AssetManager'
 import AuthScreen from './components/AuthScreen'
 import CampaignDashboard from './components/CampaignDashboard'
 import CreativeBriefBuilder from './components/CreativeBriefBuilder'
@@ -13,6 +14,12 @@ const routeOptions = [
     path: '/dashboard',
     label: 'Campaign Dashboard',
     description: 'Performance insights, filters, and campaign table',
+  },
+  {
+    id: 'assets',
+    path: '/assets',
+    label: 'Asset Manager',
+    description: 'Centralized storage for campaign images and documents',
   },
   {
     id: 'brief',
@@ -305,6 +312,7 @@ function App() {
           }
         >
           <Route path="/dashboard" element={<CampaignDashboard token={token} currentUser={currentUser} />} />
+          <Route path="/assets" element={<AssetManager token={token} currentUser={currentUser} />} />
           <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} userRole={currentUser?.role} allowedRoles={['admin', 'manager']} />}>
             <Route path="/brief" element={<CreativeBriefBuilder currentUser={currentUser} />} />
           </Route>
