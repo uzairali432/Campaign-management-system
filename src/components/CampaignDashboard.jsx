@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   CartesianGrid,
   Line,
@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { fetchCampaigns } from '../lib/campaignApi'
+import { API_BASE_URL, fetchCampaigns } from '../lib/campaignApi'
 
 const statusStyles = {
   pending_approval: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
@@ -155,6 +155,7 @@ function CampaignDashboard({ token, currentUser }) {
   const [campaigns, setCampaigns] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
+  const [isLive, setIsLive] = useState(false)
   const [selectedClient, setSelectedClient] = useState('all')
   const [selectedCampaign, setSelectedCampaign] = useState('all')
   const [selectedPreset, setSelectedPreset] = useState('30d')
@@ -164,59 +165,79 @@ function CampaignDashboard({ token, currentUser }) {
   const [customEnd, setCustomEnd] = useState('2026-04-01')
   const [sortConfig, setSortConfig] = useState({ key: 'spend', direction: 'desc' })
 
-  useEffect(() => {
-    let isActive = true
-
-    const loadCampaigns = async () => {
-      if (!token) {
-        setCampaigns([])
-        setLoadError('Your session expired. Please sign in again.')
-        setIsLoading(false)
-        return
-      }
-
-      setIsLoading(true)
-      setLoadError('')
-
-      try {
-        const response = await fetchCampaigns(token)
-
-        if (!isActive) {
-          return
-        }
-
-        setCampaigns(
-          (response.campaigns || []).map((campaign) => ({
-            ...campaign,
-            id: campaign.id || campaign._id,
-            budget: toNumber(campaign.budget),
-            spend: toNumber(campaign.spend),
-            impressions: toNumber(campaign.impressions),
-            clicks: toNumber(campaign.clicks),
-            conversions: toNumber(campaign.conversions),
-            revenue: toNumber(campaign.revenue),
-          })),
-        )
-      } catch (error) {
-        if (!isActive) {
-          return
-        }
-
-        setCampaigns([])
-        setLoadError(error.message)
-      } finally {
-        if (isActive) {
-          setIsLoading(false)
-        }
-      }
+  const loadCampaigns = useCallback(async () => {
+    if (!token) {
+      setCampaigns([])
+      setLoadError('Your session expired. Please sign in again.')
+      setIsLoading(false)
+      return
     }
 
-    loadCampaigns()
+    setIsLoading(true)
+    setLoadError('')
 
-    return () => {
-      isActive = false
+    try {
+      const response = await fetchCampaigns(token)
+
+      setCampaigns(
+        (response.campaigns || []).map((campaign) => ({
+          ...campaign,
+          id: campaign.id || campaign._id,
+          budget: toNumber(campaign.budget),
+          spend: toNumber(campaign.spend),
+          impressions: toNumber(campaign.impressions),
+          clicks: toNumber(campaign.clicks),
+          conversions: toNumber(campaign.conversions),
+          revenue: toNumber(campaign.revenue),
+        })),
+      )
+    } catch (error) {
+      setCampaigns([])
+      setLoadError(error.message)
+    } finally {
+      setIsLoading(false)
     }
   }, [token])
+
+  // Initial load
+  useEffect(() => {
+    loadCampaigns()
+  }, [loadCampaigns])
+
+  // Real-time updates via Server-Sent Events.
+  // EventSource (the browser SSE API) does not support custom request headers,
+  // so the JWT is passed as a query parameter. This exposes it in server logs
+  // and browser history; the trade-off is acceptable for this demo because the
+  // token is already stored in localStorage and the server validates it on
+  // every connection. A production system should use short-lived SSE tokens or
+  // cookie-based auth instead.
+  useEffect(() => {
+    if (!token) return
+
+    const url = `${API_BASE_URL}/api/events/campaigns?token=${encodeURIComponent(token)}`
+    const source = new EventSource(url)
+
+    source.addEventListener('connected', () => {
+      setIsLive(true)
+    })
+
+    const handleCampaignEvent = () => {
+      loadCampaigns()
+    }
+
+    source.addEventListener('campaign_created', handleCampaignEvent)
+    source.addEventListener('campaign_updated', handleCampaignEvent)
+    source.addEventListener('campaign_deleted', handleCampaignEvent)
+
+    source.onerror = () => {
+      setIsLive(false)
+    }
+
+    return () => {
+      source.close()
+      setIsLive(false)
+    }
+  }, [token, loadCampaigns])
 
   const clients = useMemo(
     () => ['all', ...new Set(campaigns.map((campaign) => campaign.client).filter(Boolean))],
@@ -329,7 +350,22 @@ function CampaignDashboard({ token, currentUser }) {
     <div className="grid gap-5 lg:grid-cols-[320px,1fr]">
       <aside className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-5 shadow-panel backdrop-blur dark:border-slate-800 dark:bg-slate-950/70">
         <div className="mb-5 rounded-[1.5rem] border border-cyan-200 bg-gradient-to-br from-cyan-50 to-white p-4 dark:border-cyan-900/70 dark:from-cyan-950/40 dark:to-slate-950">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-300">Active window</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-300">Active window</p>
+            <span
+              title={isLive ? 'Real-time updates active' : 'Connecting…'}
+              className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold ${
+                isLive
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                  : 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${isLive ? 'animate-pulse bg-emerald-500' : 'bg-slate-400'}`}
+              />
+              {isLive ? 'Live' : 'Offline'}
+            </span>
+          </div>
           <p className="mt-2 font-display text-3xl font-semibold">{daysInPreset} days</p>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Live scope for KPIs and table data.</p>
         </div>

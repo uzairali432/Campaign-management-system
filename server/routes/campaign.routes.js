@@ -1,8 +1,52 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
 const { protect } = require('../middleware/auth');
 const Campaign = require('../models/campaign.model');
 const User = require('../models/user.model');
+const { broadcast } = require('../events');
+
+// ---------------------------------------------------------------------------
+// Multer – file upload configuration
+// ---------------------------------------------------------------------------
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: uploadsDir,
+  filename: (_req, file, cb) => {
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const ext = path.extname(file.originalname) || '';
+    cb(null, `${unique}${ext}`);
+  },
+});
+
+const ALLOWED_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('File type not allowed. Accepted: images, PDF, Word documents.'));
+    }
+  },
+});
 
 const CAMPAIGN_STATUS = {
   DRAFT: 'draft',
@@ -128,6 +172,10 @@ const canAccessCampaign = (campaign, user) => {
   }
 
   return String(campaign.createdBy) === String(user.id);
+};
+
+const unlinkUploadedFile = (filename) => {
+  fs.unlink(path.join(uploadsDir, path.basename(filename)), () => {});
 };
 
 // GET /api/campaigns
@@ -296,13 +344,12 @@ router.post('/', protect, async (req, res, next) => {
       ],
     });
 
+    broadcast('campaign_created', { id: campaign._id });
     return res.status(201).json({ message: 'Campaign created successfully', campaign });
   } catch (error) {
     return next(error);
   }
 });
-
-// PUT /api/campaigns/:id
 router.put('/:id', protect, async (req, res, next) => {
   try {
     if (req.user.role === 'viewer') {
@@ -382,6 +429,7 @@ router.put('/:id', protect, async (req, res, next) => {
 
     await campaign.save();
 
+    broadcast('campaign_updated', { id: campaign._id });
     return res.status(200).json({ message: 'Campaign updated successfully', campaign });
   } catch (error) {
     return next(error);
@@ -486,7 +534,121 @@ router.delete('/:id', protect, async (req, res, next) => {
 
     await campaign.deleteOne();
 
+    broadcast('campaign_deleted', { id: req.params.id });
     return res.status(200).json({ message: 'Campaign deleted successfully' });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Asset management
+// ---------------------------------------------------------------------------
+
+// GET /api/campaigns/:id/assets
+router.get('/:id/assets', protect, async (req, res, next) => {
+  try {
+    const campaign = await Campaign.findById(req.params.id).select('createdBy assets');
+
+    if (!campaign) {
+      return res.status(404).json({ message: 'Campaign not found' });
+    }
+
+    if (!canAccessCampaign(campaign, req.user)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    return res.status(200).json({ assets: campaign.assets });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// POST /api/campaigns/:id/assets
+router.post('/:id/assets', protect, upload.single('file'), async (req, res, next) => {
+  try {
+    if (req.user.role === 'viewer') {
+      if (req.file) {
+        unlinkUploadedFile(req.file.filename);
+      }
+      return res.status(403).json({ message: 'Viewers cannot upload assets' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file provided' });
+    }
+
+    const campaign = await Campaign.findById(req.params.id);
+
+    if (!campaign) {
+      unlinkUploadedFile(req.file.filename);
+      return res.status(404).json({ message: 'Campaign not found' });
+    }
+
+    if (!canAccessCampaign(campaign, req.user)) {
+      unlinkUploadedFile(req.file.filename);
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const assetDoc = {
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+      uploadedBy: {
+        user: req.user.id,
+        name: req.user.name,
+        email: req.user.email,
+        role: req.user.role,
+      },
+    };
+
+    campaign.assets.push(assetDoc);
+    await campaign.save();
+
+    const asset = campaign.assets[campaign.assets.length - 1];
+
+    broadcast('campaign_updated', { id: campaign._id });
+    return res.status(201).json({ message: 'Asset uploaded successfully', asset });
+  } catch (error) {
+    if (req.file) {
+      unlinkUploadedFile(req.file.filename);
+    }
+    return next(error);
+  }
+});
+
+// DELETE /api/campaigns/:id/assets/:assetId
+router.delete('/:id/assets/:assetId', protect, async (req, res, next) => {
+  try {
+    if (req.user.role === 'viewer') {
+      return res.status(403).json({ message: 'Viewers cannot delete assets' });
+    }
+
+    const campaign = await Campaign.findById(req.params.id);
+
+    if (!campaign) {
+      return res.status(404).json({ message: 'Campaign not found' });
+    }
+
+    if (!canAccessCampaign(campaign, req.user)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const asset = campaign.assets.id(req.params.assetId);
+
+    if (!asset) {
+      return res.status(404).json({ message: 'Asset not found' });
+    }
+
+    const filePath = path.join(uploadsDir, path.basename(asset.filename));
+
+    campaign.assets.pull(req.params.assetId);
+    await campaign.save();
+
+    fs.unlink(filePath, () => {});
+
+    return res.status(200).json({ message: 'Asset deleted successfully' });
   } catch (error) {
     return next(error);
   }

@@ -2,11 +2,13 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const path = require('path');
 const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
 
 const authRoutes = require('./routes/auth.routes');
 const campaignRoutes = require('./routes/campaign.routes');
+const eventsRoutes = require('./routes/events.routes');
 
 // Connect to MongoDB
 connectDB();
@@ -17,6 +19,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
+
+// Serve uploaded campaign assets
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Rate limiting – apply to all API routes
 const apiLimiter = rateLimit({
@@ -31,6 +36,7 @@ app.use('/api/', apiLimiter);
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/campaigns', campaignRoutes);
+app.use('/api/events', eventsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

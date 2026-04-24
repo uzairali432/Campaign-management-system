@@ -89,6 +89,36 @@ const activitySchema = new mongoose.Schema(
   }
 );
 
+const assetSchema = new mongoose.Schema(
+  {
+    filename: {
+      type: String,
+      required: true,
+    },
+    originalName: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 260,
+    },
+    mimeType: {
+      type: String,
+      required: true,
+    },
+    size: {
+      type: Number,
+      required: true,
+    },
+    uploadedBy: {
+      type: userSnapshotSchema,
+      required: true,
+    },
+  },
+  {
+    timestamps: { createdAt: true, updatedAt: false },
+  }
+);
+
 const campaignSchema = new mongoose.Schema(
   {
     name: {
@@ -163,6 +193,10 @@ const campaignSchema = new mongoose.Schema(
     },
     activity: {
       type: [activitySchema],
+      default: [],
+    },
+    assets: {
+      type: [assetSchema],
       default: [],
     },
   },
