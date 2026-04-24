@@ -174,6 +174,10 @@ const canAccessCampaign = (campaign, user) => {
   return String(campaign.createdBy) === String(user.id);
 };
 
+const unlinkUploadedFile = (filename) => {
+  fs.unlink(path.join(uploadsDir, path.basename(filename)), () => {});
+};
+
 // GET /api/campaigns
 router.get('/', protect, async (req, res, next) => {
   try {
@@ -565,7 +569,7 @@ router.post('/:id/assets', protect, upload.single('file'), async (req, res, next
   try {
     if (req.user.role === 'viewer') {
       if (req.file) {
-        fs.unlink(path.join(uploadsDir, path.basename(req.file.filename)), () => {});
+        unlinkUploadedFile(req.file.filename);
       }
       return res.status(403).json({ message: 'Viewers cannot upload assets' });
     }
@@ -577,12 +581,12 @@ router.post('/:id/assets', protect, upload.single('file'), async (req, res, next
     const campaign = await Campaign.findById(req.params.id);
 
     if (!campaign) {
-      fs.unlink(path.join(uploadsDir, path.basename(req.file.filename)), () => {});
+      unlinkUploadedFile(req.file.filename);
       return res.status(404).json({ message: 'Campaign not found' });
     }
 
     if (!canAccessCampaign(campaign, req.user)) {
-      fs.unlink(path.join(uploadsDir, path.basename(req.file.filename)), () => {});
+      unlinkUploadedFile(req.file.filename);
       return res.status(403).json({ message: 'Forbidden' });
     }
 
@@ -608,7 +612,7 @@ router.post('/:id/assets', protect, upload.single('file'), async (req, res, next
     return res.status(201).json({ message: 'Asset uploaded successfully', asset });
   } catch (error) {
     if (req.file) {
-      fs.unlink(path.join(uploadsDir, path.basename(req.file.filename)), () => {});
+      unlinkUploadedFile(req.file.filename);
     }
     return next(error);
   }

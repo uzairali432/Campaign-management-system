@@ -45,6 +45,7 @@ router.get('/campaigns', (req, res) => {
       res.write(':ping\n\n');
     } catch {
       clearInterval(heartbeat);
+      removeClient(res);
     }
   }, 25000);
 

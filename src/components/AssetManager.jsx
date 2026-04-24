@@ -250,7 +250,12 @@ function AssetManager({ token, currentUser }) {
           ) : (
             <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {assets.map((asset) => {
-                const assetUrl = `${API_BASE_URL}/uploads/${asset.filename}`
+                // Validate that the stored filename contains only safe characters
+                // (multer generates names as "<timestamp>-<random>.<ext>") before
+                // embedding it in a URL to prevent open-redirect or XSS via a
+                // tampered database value.
+                const safeFilename = /^[\w.-]+$/.test(asset.filename) ? asset.filename : ''
+                const assetUrl = safeFilename ? `${API_BASE_URL}/uploads/${safeFilename}` : ''
                 const isImg = isImage(asset.mimeType)
 
                 return (
@@ -260,7 +265,7 @@ function AssetManager({ token, currentUser }) {
                   >
                     {/* Thumbnail */}
                     <div className="flex h-36 items-center justify-center bg-slate-100 dark:bg-slate-800">
-                      {isImg ? (
+                      {isImg && assetUrl ? (
                         <img
                           src={assetUrl}
                           alt={asset.originalName}
@@ -289,14 +294,16 @@ function AssetManager({ token, currentUser }) {
                       </div>
 
                       <div className="flex shrink-0 gap-1.5">
-                        <a
-                          href={assetUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                          View
-                        </a>
+                        {assetUrl && (
+                          <a
+                            href={assetUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
+                          >
+                            View
+                          </a>
+                        )}
                         {!isViewer && (
                           <button
                             type="button"
