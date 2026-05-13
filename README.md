@@ -30,5 +30,4 @@ npm install
 # Install Client dependencies
 cd ../client
 npm install
-made by Uzair Ali 
 
